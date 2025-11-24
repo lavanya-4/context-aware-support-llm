@@ -1,0 +1,1 @@
+[{"source": "docs/faq.txt", "chunk": "Company on-call process:\n1) PagerDuty alerts Level-1.\n2) If no response in 10 minutes, escalate to Level-2."}]

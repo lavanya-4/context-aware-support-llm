@@ -1,0 +1,3 @@
+Company on-call process:
+1) PagerDuty alerts Level-1.
+2) If no response in 10 minutes, escalate to Level-2.

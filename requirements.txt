@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+faiss-cpu
+sentence-transformers
+pypdf
+numpy
+tiktoken
+scikit-learn
