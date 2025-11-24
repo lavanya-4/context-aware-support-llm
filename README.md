@@ -15,12 +15,11 @@ It is a **Retrieval-Augmented Generation (RAG)** system that automates customer 
 pip install -r requirements.txt
 python indexer.py
 uvicorn rag_server:app --reload --port 8000
-🧱 Technologies Used
+
+Technologies Used:
 
 Python, FastAPI, Uvicorn
-
 FAISS, SentenceTransformers
-
 dotenv, pypdf, tiktoken
 
 💡 Future Enhancements
