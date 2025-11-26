@@ -9,33 +9,36 @@ from sentence_transformers import SentenceTransformer
 from utils.loaders import load_documents
 from utils.text import clean_text, chunk_by_tokens
 
-DOC_DIR = Path("docs")                   # <-- must be at project root
+DOC_DIRS = [Path("pdfs")]  # Scan both folders
 INDEX_DIR = Path(".rag_index")
 META_PATH = INDEX_DIR / "meta.json"
 INDEX_PATH = INDEX_DIR / "faiss.index"
 DIM_PATH = INDEX_DIR / "dim.txt"
 
-CHUNK_TOKENS = 400
-CHUNK_OVERLAP = 40
+CHUNK_TOKENS = 500
+CHUNK_OVERLAP = 50
 
 def build():
     load_dotenv()
     embed_model_name = "sentence-transformers/all-MiniLM-L6-v2"
     model = SentenceTransformer(embed_model_name)
 
-    if not DOC_DIR.exists():
-        print(f"[!] {DOC_DIR}/ not found. Create it and add some files.")
-        return
+    all_docs = []
+    for d in DOC_DIRS:
+        if d.exists():
+            print(f"Loading documents from {d}...")
+            all_docs.extend(load_documents(d))
+        else:
+            print(f"[!] {d}/ not found. Skipping.")
 
-    docs = load_documents(DOC_DIR)
-    if not docs:
-        print(f"[!] No documents found in {DOC_DIR}/")
+    if not all_docs:
+        print(f"[!] No documents found in {DOC_DIRS}")
         return
 
     chunks: List[str] = []
     metas: List[Dict] = []
 
-    for src, txt in docs:
+    for src, txt in all_docs:
         txt = clean_text(txt)
         for ch in chunk_by_tokens(txt, CHUNK_TOKENS, CHUNK_OVERLAP):
             chunks.append(ch)
