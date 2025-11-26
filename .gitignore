@@ -1,0 +1,4 @@
+# Ignore venv
+venv/
+adaptor/
+llama-3-8b-bnb-4bit/

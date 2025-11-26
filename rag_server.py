@@ -1,29 +1,46 @@
-import os, json
+import os, json, re
 from pathlib import Path
 from typing import List, Dict, Tuple
 import faiss
-import requests
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
+from fastapi.staticfiles import StaticFiles
 
+# MLX imports
+from mlx_lm import load, generate
+
+# Configurations
 INDEX_DIR = Path(".rag_index")
 META_PATH = INDEX_DIR / "meta.json"
 INDEX_PATH = INDEX_DIR / "faiss.index"
 DIM_PATH = INDEX_DIR / "dim.txt"
+# Use an MLX-compatible model
+BASE_MODEL = "mlx-community/Meta-Llama-3-8B-Instruct-4bit"
+ADAPTER_PATH = "./adaptor" 
 
 TOP_K = 6
 MAX_CTX = 6
 
+SYSTEM = """You are a precise assistant. Answer ONLY using the provided context.
+If the answer is not in the context, say you don't know and suggest where to look internally.
+Cite sources like [1], [2] at the end of supporting sentences.
+"""
+
 class AskReq(BaseModel):
-    query: str
+    message: str
 
 class AskResp(BaseModel):
-    answer: str
+    reply: str
     citations: List[Dict]
 
-app = FastAPI(title="Company RAG")
+# Globals for loaded models
+_llama_tokenizer = None
+_llama_model = None
+_index = None
+_metas = None
+_embedder = None
 
 def load_index():
     if not (INDEX_PATH.exists() and META_PATH.exists() and DIM_PATH.exists()):
@@ -32,21 +49,47 @@ def load_index():
     metas = json.loads(META_PATH.read_text(encoding="utf-8"))
     return index, metas
 
-def slm_generate(prompt: str) -> str:
-    base = os.getenv("SLM_BASE_URL", "http://localhost:9000")
-    model = os.getenv("SLM_MODEL", "company-slm-v1")
-    token = os.getenv("AUTH_TOKEN", "")
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
-    payload = {"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.2}
-    r = requests.post(f"{base}/v1/chat/completions", json=payload, headers=headers, timeout=60)
-    r.raise_for_status()
-    data = r.json()
-    return data["choices"][0]["message"]["content"]
+from contextlib import asynccontextmanager
 
-SYSTEM = """You are a precise assistant. Answer ONLY using the provided context.
-If the answer is not in the context, say you don't know and suggest where to look internally.
-Cite sources like [1], [2] at the end of supporting sentences.
-"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    load_dotenv()
+    global _index, _metas, _embedder, _llama_tokenizer, _llama_model
+    _index, _metas = load_index()
+    _embedder = SentenceTransformer(os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2"))
+    
+    print(f"Loading MLX model: {BASE_MODEL}...")
+    # Try to load with adapter if it exists and is compatible, otherwise load base
+    # Note: MLX adapter loading might require specific format. 
+    # For now, we load the base model. To use the adapter, it needs to be converted to MLX format.
+    _llama_model, _llama_tokenizer = load(BASE_MODEL)
+    print("Model loaded.")
+    
+    yield
+    # Clean up resources if needed
+
+app = FastAPI(title="Company RAG", lifespan=lifespan)
+
+def slm_generate(prompt: str, max_new_tokens=256) -> str:
+    global _llama_tokenizer, _llama_model
+    
+    # mlx_lm.generate takes the model and tokenizer directly
+    completion = generate(
+        _llama_model,
+        _llama_tokenizer,
+        prompt=prompt,
+        max_tokens=max_new_tokens,
+        verbose=False
+    )
+    
+    # Optional: strip "assistant" header if used in your LoRA prompt style
+    # Optional: strip "assistant" header if used in your LoRA prompt style
+    if "<|start_header_id|>assistant<|end_header_id|>" in completion:
+        completion = completion.split("<|start_header_id|>assistant<|end_header_id|>")[-1].strip()
+    
+    # Aggressively clean up trailing backticks and whitespace
+    completion = re.sub(r'[`\s]+$', '', completion)
+    return completion
 
 def build_prompt(query: str, hits: List[Tuple[float, Dict]]):
     hits = sorted(hits, key=lambda x: x[0], reverse=True)[:MAX_CTX]
@@ -74,13 +117,6 @@ Instructions:
 Answer now."""
     return prompt, refs
 
-@app.on_event("startup")
-def _startup():
-    load_dotenv()
-    global _index, _metas, _embedder
-    _index, _metas = load_index()
-    _embedder = SentenceTransformer(os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2"))
-
 def retrieve(query: str, top_k=TOP_K):
     qv = _embedder.encode([query], convert_to_numpy=True, normalize_embeddings=True).astype("float32")
     D, I = _index.search(qv, top_k)
@@ -91,12 +127,19 @@ def retrieve(query: str, top_k=TOP_K):
         results.append((float(score), _metas[idx]))
     return results
 
-@app.post("/ask", response_model=AskResp)
+@app.post("/api/ask", response_model=AskResp)
 def ask(req: AskReq):
-    hits = retrieve(req.query)
+    hits = retrieve(req.message)
     if not hits:
-        return AskResp(answer="I couldn't find anything relevant in the index. Please add more documents.", citations=[])
-    prompt, refs = build_prompt(req.query, hits)
+        return AskResp(reply="I couldn't find anything relevant in the index. Please add more documents.", citations=[])
+    prompt, refs = build_prompt(req.message, hits)
     answer = slm_generate(prompt)
     cits = [{"source": r["source"], "preview": r["preview"]} for r in refs]
-    return AskResp(answer=answer, citations=cits)
+    return AskResp(reply=answer, citations=cits)
+
+
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
