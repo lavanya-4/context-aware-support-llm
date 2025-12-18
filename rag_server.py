@@ -193,7 +193,7 @@ Answer:"""
                         # "HTTP-Referer": "http://localhost:8000", # Optional
                     },
                     json={
-                        "model": "google/gemini-2.0-flash-exp:free", # Valid free model
+                        "model": "meta-llama/llama-3.2-3b-instruct:free", # Switched to Llama 3.2 3B (Free) to avoid rate limits
                         "messages": [
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_message}
