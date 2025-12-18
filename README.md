@@ -1,5 +1,7 @@
 # 🧠 Context-Aware Support System (Hybrid Hierarchical RAG)
 
+https://github.com/user-attachments/assets/5d839612-361c-4356-87e6-c543ebfbbfc4
+
 A privacy-preserving, cost-efficient customer support assistant that combines **Edge AI** with **Cloud LLMs**.
 
 This project implements a **Hierarchical Retrieval-Augmented Generation (RAG)** pipeline. Instead of sending raw retrieval data directly to expensive cloud providers, we use a locally running Small Language Model (SLM) to **read, refine, and compress** the context before final generation.
