@@ -128,13 +128,15 @@ def retrieve(query: str, top_k=TOP_K):
         results.append((float(score), _metas[idx]))
     return results
 
-def slm_select_chunks(query: str, hits: List[Tuple[float, Dict]]) -> List[Dict]:
+def slm_refine_context(query: str, hits: List[Tuple[float, Dict]]) -> Tuple[str, List[Dict]]:
     """
-    Uses the local SLM to select the 2 most relevant chunks from the retrieved hits.
+    Uses the local SLM to read the retrieved chunks and generate a refined summary 
+    containing only the key information relevant to the query.
+    Returns the refined summary and the list of original hits (for citations).
     """
     hits = sorted(hits, key=lambda x: x[0], reverse=True)[:MAX_CTX]
     
-    # Prepare context for selection
+    # Prepare context for refinement
     blocks = []
     for i, (score, m) in enumerate(hits, 1):
         chunk = m["chunk"]
@@ -147,59 +149,33 @@ Query: {query}
 Contexts:
 {ctx}
 
-Task: Identify the 2 most relevant contexts to answer the query.
-Return ONLY the numbers of the 2 most relevant contexts, separated by commas (e.g., "1, 3").
-Do not output anything else.
-Selection:"""
+Task: Read the contexts above and extract ONLY the key information relevant to answering the query. 
+Synthesize this into a concise summary. Do not include irrelevant details.
+If the contexts don't contain the answer, say "No relevant information found."
+Refined Summary:"""
 
-    selection_str = slm_generate(prompt, max_new_tokens=16)
-    print(f"SLM Selection Output: {selection_str}")
+    refined_summary = slm_generate(prompt, max_new_tokens=256)
+    print(f"SLM Refined Summary: {refined_summary}")
     
-    # Parse selection
-    selected_indices = []
-    try:
-        # Extract numbers using regex
-        nums = re.findall(r'\d+', selection_str)
-        selected_indices = [int(n) for n in nums]
-    except Exception as e:
-        print(f"Error parsing selection: {e}")
-    
-    # Fallback: if parsing fails or < 2 selected, take top 2
-    if len(selected_indices) < 2:
-        selected_indices = [1, 2]
-    
-    # Map back to hits (1-based index to 0-based)
-    selected_hits = []
-    for idx in selected_indices[:2]: # Ensure max 2
-        if 1 <= idx <= len(hits):
-            selected_hits.append(hits[idx-1][1]) # Append metadata dict
-            
-    return selected_hits
+    # We return all hits as potential citations, but the LLM sees the summary
+    return refined_summary, [h[1] for h in hits]
 
-async def external_llm_generate(query: str, contexts: List[Dict]) -> str:
+async def external_llm_generate(query: str, context_summary: str) -> str:
     """
-    Calls OpenRouter to generate the final answer using the selected contexts.
+    Calls OpenRouter to generate the final answer using the refined summary from the SLM.
     """
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
         return "Error: OPENROUTER_API_KEY not set."
 
-    # Prepare context
-    blocks = []
-    for i, m in enumerate(contexts, 1):
-        chunk = m["chunk"]
-        blocks.append(f"[{i}] {chunk}")
-    ctx = "\n\n".join(blocks)
-    
-    system_prompt = """You are a precise assistant. Answer ONLY using the provided context.
-If the answer is not in the context, say you don't know.
-Cite sources like [1], [2] at the end of supporting sentences."""
+    system_prompt = """You are a precise assistant. Answer the user's query using ONLY the provided Context Summary.
+If the summary says "No relevant information found", state that you don't know."""
 
     user_message = f"""Query:
 {query}
 
-Context:
-{ctx}
+Context Summary:
+{context_summary}
 
 Answer:"""
 
@@ -260,20 +236,20 @@ async def ask(req: AskReq):
     if not hits:
         return AskResp(reply="I couldn't find anything relevant in the index.", citations=[])
     
-    # 2. SLM selects 2 relevant chunks
+    # 2. SLM refines context (Summarization/Extraction)
     t1 = time.time()
-    selected_metas = slm_select_chunks(req.message, hits)
-    print(f"[Timing] SLM Selection took: {time.time() - t1:.2f}s")
+    refined_summary, all_metas = slm_refine_context(req.message, hits)
+    print(f"[Timing] SLM Refinement took: {time.time() - t1:.2f}s")
     
-    # 3. External LLM generates answer
+    # 3. External LLM generates answer using the summary
     t2 = time.time()
-    answer = await external_llm_generate(req.message, selected_metas)
+    answer = await external_llm_generate(req.message, refined_summary)
     print(f"[Timing] External LLM took: {time.time() - t2:.2f}s")
     
     print(f"[Timing] Total Request took: {time.time() - start_total:.2f}s")
     
-    # Prepare citations for the selected chunks
-    cits = [{"source": m["source"], "preview": " ".join(m["chunk"].split()[:12]) + " ..."} for m in selected_metas]
+    # Prepare citations (we show the top 3 original sources as references)
+    cits = [{"source": m["source"], "preview": " ".join(m["chunk"].split()[:12]) + " ..."} for m in all_metas[:3]]
     
     return AskResp(reply=answer, citations=cits)
 

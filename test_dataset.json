@@ -1,0 +1,122 @@
+[
+    {
+        "id": 1,
+        "query": "What are the sanctions for academic dishonesty?",
+        "ground_truth_keywords": [
+            "sanction",
+            "expulsion",
+            "suspension",
+            "grade",
+            "faculty"
+        ],
+        "category": "Academic"
+    },
+    {
+        "id": 2,
+        "query": "Can I have a lawyer present at a student conduct hearing?",
+        "ground_truth_keywords": [
+            "lawyer",
+            "attorney",
+            "advisor",
+            "hearing",
+            "process"
+        ],
+        "category": "Conduct"
+    },
+    {
+        "id": 3,
+        "query": "What is the policy on plagiarism?",
+        "ground_truth_keywords": [
+            "plagiarism",
+            "cite",
+            "source",
+            "attribute",
+            "academic"
+        ],
+        "category": "Academic"
+    },
+    {
+        "id": 4,
+        "query": "How do recognized student organizations reserve space?",
+        "ground_truth_keywords": [
+            "reserve",
+            "space",
+            "student",
+            "organization",
+            "facility"
+        ],
+        "category": "RSO"
+    },
+    {
+        "id": 5,
+        "query": "What happens if I disrupt a class?",
+        "ground_truth_keywords": [
+            "disrupt",
+            "class",
+            "conduct",
+            "instructor",
+            "remove"
+        ],
+        "category": "Conduct"
+    },
+    {
+        "id": 6,
+        "query": "Are student organizations allowed to serve alcohol?",
+        "ground_truth_keywords": [
+            "alcohol",
+            "serve",
+            "event",
+            "policy",
+            "organization"
+        ],
+        "category": "RSO"
+    },
+    {
+        "id": 7,
+        "query": "What is the definition of cheating?",
+        "ground_truth_keywords": [
+            "cheating",
+            "exam",
+            "test",
+            "material",
+            "unauthorized"
+        ],
+        "category": "Academic"
+    },
+    {
+        "id": 8,
+        "query": "Who is responsible for the conduct of guests at student organization events?",
+        "ground_truth_keywords": [
+            "guest",
+            "host",
+            "responsible",
+            "conduct",
+            "organization"
+        ],
+        "category": "RSO"
+    },
+    {
+        "id": 9,
+        "query": "What are the rules regarding hazing?",
+        "ground_truth_keywords": [
+            "hazing",
+            "initiation",
+            "pledge",
+            "prohibited",
+            "harm"
+        ],
+        "category": "Conduct"
+    },
+    {
+        "id": 10,
+        "query": "Can I appeal a disciplinary decision?",
+        "ground_truth_keywords": [
+            "appeal",
+            "decision",
+            "disciplinary",
+            "review",
+            "process"
+        ],
+        "category": "Conduct"
+    }
+]
